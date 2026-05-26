@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Medcell — Revisión de Pedido</title>
+<style>
+  :root {
+    --gold: #C9A84C;
+    --gold-dim: #8B6914;
+    --gold-bg: #faf8f3;
+    --bg: #111111;
+    --bg2: #1a1a1a;
+    --bg3: #222222;
+    --border: #2a2a2a;
+    --text: #e0e0e0;
+    --text2: #a0a0a0;
+    --text3: #666666;
+    --ok: #4ade80;
+    --ok-bg: rgba(74,222,128,0.1);
+    --ok-border: rgba(74,222,128,0.3);
+    --warn: #fbbf24;
+    --warn-bg: rgba(251,191,36,0.1);
+    --warn-border: rgba(251,191,36,0.3);
+    --danger: #f87171;
+    --danger-bg: rgba(248,113,113,0.1);
+    --danger-border: rgba(248,113,113,0.3);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Georgia', serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--bg2);
+    border-bottom: 2px solid var(--gold);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .brand { font-size: 22px; font-weight: bold; color: var(--gold); letter-spacing: 5px; }
+  .brand-sub { font-size: 10px; color: var(--text3); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+  #folio-badge {
+    background: var(--bg3);
+    border: 1px solid var(--gold);
+    border-radius: var(--radius-sm);
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--gold);
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+
+  main { flex: 1; padding: 20px 24px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+  /* ESTADO INICIAL */
+  #state-loading, #state-error {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 60vh; gap: 16px; text-align: center;
+  }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ZONA ESCANEO */
+  #scan-zone {
+    background: var(--bg2);
+    border: 1px solid var(--gold);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  #scan-input {
+    flex: 1;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 15px;
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #scan-input:focus { border-color: var(--gold); }
+  #scan-input::placeholder { color: var(--text3); }
+  .scan-icon {
+    font-size: 28px;
+    color: var(--gold);
+  }
+  #scan-status {
+    font-size: 12px;
+    color: var(--text3);
+    margin-top: 8px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #scan-status.ok { color: var(--ok); }
+  #scan-status.warn { color: var(--warn); }
+  #scan-status.err { color: var(--danger); }
+
+  /* PROGRESO */
+  .progress-bar-wrap {
+    background: var(--bg3);
+    border-radius: 100px;
+    height: 6px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--gold);
+    border-radius: 100px;
+    transition: width 0.4s ease;
+  }
+  .progress-label {
+    font-size: 12px;
+    color: var(--text3);
+    text-align: right;
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+  }
+
+  /* TABLA DE PRODUCTOS */
+  .section-title {
+    font-size: 10px;
+    font-weight: bold;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 2.5px;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .product-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+  .product-row {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    align-items: center;
+    gap: 12px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .product-row.status-ok { border-color: var(--ok-border); background: rgba(74,222,128,0.04); }
+  .product-row.status-warn { border-color: var(--warn-border); background: rgba(251,191,36,0.04); }
+  .product-row.status-pending { border-color: var(--border); }
+
+  .prod-name { font-size: 13px; color: var(--text); font-weight: bold; }
+  .prod-id { font-size: 11px; color: var(--text3); margin-top: 2px; font-family: monospace; }
+  .prod-ubicacion { font-size: 11px; color: var(--gold-dim); margin-top: 2px; }
+
+  .qty-block { text-align: center; min-width: 60px; }
+  .qty-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+  .qty-val { font-size: 18px; font-weight: bold; }
+  .qty-val.original { color: var(--text2); }
+  .qty-val.scanned { color: var(--ok); }
+  .qty-val.scanned.diff { color: var(--warn); }
+  .qty-val.pending { color: var(--text3); font-size: 14px; }
+
+  .status-badge {
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .badge-ok { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); }
+  .badge-warn { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
+  .badge-pending { background: var(--bg3); border: 1px solid var(--border); color: var(--text3); }
+
+  /* RESUMEN TOTALES */
+  .totals-card {
+    background: var(--bg2);
+    border: 1px solid var(--gold);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .total-row-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .total-row-item:last-child { border-bottom: none; }
+  .total-row-item .label { color: var(--text2); }
+  .total-row-item .val { font-weight: bold; color: var(--text); }
+  .total-row-item.highlight .label { color: var(--gold); font-size: 14px; }
+  .total-row-item.highlight .val { color: var(--gold); font-size: 20px; }
+  .diff-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+  }
+  .diff-neg { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger); }
+  .diff-pos { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); }
+
+  /* BOTONES */
+  .btn-row { display: flex; gap: 12px; margin-top: 8px; }
+  .btn {
+    flex: 1;
+    padding: 14px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.2s, transform 0.1s;
+    font-family: 'Georgia', serif;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-confirm {
+    background: var(--gold);
+    color: #111;
+  }
+  .btn-confirm:hover:not(:disabled) { opacity: 0.9; }
+  .btn-reset {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .btn-reset:hover { border-color: var(--text3); }
+
+  /* ESTADO CONFIRMADO */
+  #state-done {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: 20px;
+    text-align: center;
+  }
+  .done-icon { font-size: 64px; }
+  .done-title { font-size: 22px; color: var(--ok); font-weight: bold; }
+  .done-sub { font-size: 14px; color: var(--text2); max-width: 320px; line-height: 1.7; }
+
+  /* ALERTA DIFERENCIAS */
+  .diff-alert {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-left: 4px solid var(--warn);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--warn);
+    line-height: 1.7;
+    display: none;
+  }
+  .diff-alert.visible { display: block; }
+
+  /* CONFIRMACIÓN MODAL */
+  .confirm-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .confirm-overlay.visible { display: flex; }
+  .confirm-modal {
+    background: var(--bg2);
+    border: 2px solid var(--gold);
+    border-radius: var(--radius);
+    padding: 28px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+  }
+  .confirm-modal h3 { color: var(--gold); font-size: 18px; margin-bottom: 12px; }
+  .confirm-modal p { color: var(--text2); font-size: 13px; line-height: 1.7; margin-bottom: 20px; }
+  .modal-changes { background: var(--bg3); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 20px; text-align: left; font-size: 12px; color: var(--text2); line-height: 2; }
+  .modal-changes .change-item.reduced { color: var(--warn); }
+  .modal-changes .change-item.ok { color: var(--ok); }
+
+  /* HIDDEN */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="brand">MEDCELL</div>
+    <div class="brand-sub">Revisión de Pedido</div>
+  </div>
+  <div id="folio-badge">Cargando...</div>
+</header>
+
+<main>
+
+  <!-- LOADING -->
+  <div id="state-loading">
+    <div class="spinner"></div>
+    <p style="color:var(--text3);font-size:13px;letter-spacing:1px;">CARGANDO PEDIDO...</p>
+  </div>
+
+  <!-- ERROR -->
+  <div id="state-error" class="hidden">
+    <div style="font-size:48px;">⚠️</div>
+    <p style="color:var(--danger);font-size:16px;" id="error-msg">Error al cargar el pedido</p>
+    <button class="btn btn-reset" style="max-width:200px" onclick="location.reload()">Reintentar</button>
+  </div>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div id="state-main" class="hidden">
+
+    <!-- ESCANEO -->
+    <div id="scan-zone">
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">
+          Escanear código de barras
+        </div>
+        <input
+          id="scan-input"
+          type="text"
+          placeholder="Apunta el lector aquí y escanea..."
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+        <div id="scan-status">Listo para escanear</div>
+      </div>
+    </div>
+
+    <!-- PROGRESO -->
+    <div>
+      <div class="progress-label">
+        <span id="progress-text">0 de 0 productos escaneados</span>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- ALERTA DIFERENCIAS -->
+    <div class="diff-alert" id="diff-alert">
+      ⚠️ Hay diferencias entre el pedido original y lo escaneado.
+      Al confirmar, el cliente recibirá el total ajustado.
+    </div>
+
+    <!-- LISTA PRODUCTOS -->
+    <div class="section-title">Detalle del Pedido</div>
+    <div class="product-list" id="product-list"></div>
+
+    <!-- TOTALES -->
+    <div class="totals-card" id="totals-card">
+      <div class="section-title" style="margin-bottom:14px;">Resumen</div>
+      <div class="total-row-item">
+        <span class="label">Total original</span>
+        <span class="val" id="total-original">$0</span>
+      </div>
+      <div class="total-row-item">
+        <span class="label">Total escaneado</span>
+        <span class="val" id="total-scanned">$0</span>
+      </div>
+      <div class="total-row-item highlight">
+        <span class="label">Total a cobrar</span>
+        <span class="val" id="total-final">$0</span>
+      </div>
+    </div>
+
+    <!-- BOTONES -->
+    <div class="btn-row">
+      <button class="btn btn-reset" id="btn-reset" onclick="resetScans()">Reiniciar escaneo</button>
+      <button class="btn btn-confirm" id="btn-confirm" onclick="showConfirm()" disabled>
+        Confirmar y enviar correo
+      </button>
+    </div>
+
+  </div>
+
+  <!-- DONE -->
+  <div id="state-done" style="display:none;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px;text-align:center;">
+    <div style="font-size:64px;">✅</div>
+    <div style="font-size:22px;color:var(--ok);font-weight:bold;">Revisión confirmada</div>
+    <div style="font-size:14px;color:var(--text2);max-width:320px;line-height:1.7;" id="done-msg"></div>
+    <div style="background:var(--bg2);border:1px solid var(--gold);border-radius:var(--radius-sm);padding:12px 20px;font-size:18px;color:var(--gold);font-weight:bold;" id="done-folio"></div>
+    <div style="font-size:13px;color:var(--text3);">El correo con el monto definitivo fue enviado al comprador.</div>
+  </div>
+
+</main>
+
+<!-- MODAL CONFIRMACIÓN -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-modal">
+    <h3>Confirmar revisión</h3>
+    <p>Se actualizarán las cantidades y se enviará el correo al comprador con el total definitivo.</p>
+    <div class="modal-changes" id="modal-changes"></div>
+    <div class="btn-row">
+      <button class="btn btn-reset" onclick="hideConfirm()">Cancelar</button>
+      <button class="btn btn-confirm" id="btn-modal-confirm" onclick="confirmarRevision()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN — cambia solo esta URL
+// ============================================================
+const APPS_SCRIPT_URL = 'TU_DEPLOYMENT_URL_AQUI';
+
+// ============================================================
+// ESTADO
+// ============================================================
+let folio        = '';
+let productos    = [];   // { ID_Producto, Nombre, Precio, Cantidad_Pedida, Ubicacion_Bodega, Codigo_Barras }
+let escaneos     = {};   // { ID_Producto: cantidadEscaneada }
+let totalOriginal = 0;
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(window.location.search);
+  folio = params.get('folio') || '';
+
+  if (!folio) {
+    showError('No se recibió el folio del pedido. Abre esta página desde AppSheet.');
+    return;
+  }
+
+  document.getElementById('folio-badge').textContent = folio;
+
+  try {
+    const data = await fetchPedido(folio);
+    if (!data.success) { showError(data.error || 'Error al cargar el pedido'); return; }
+    productos = data.items;
+    totalOriginal = productos.reduce((s, p) => s + (p.Cantidad_Pedida * p.Precio), 0);
+    initUI();
+  } catch(e) {
+    showError('Error de conexión: ' + e.message);
+  }
+});
+
+async function fetchPedido(folio) {
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accion: 'getPedido', folio })
+  });
+  return await res.json();
+}
+
+// ============================================================
+// UI INICIAL
+// ============================================================
+function initUI() {
+  // Inicializar escaneos a 0
+  productos.forEach(p => { escaneos[p.ID_Producto] = null; });
+
+  renderProductos();
+  updateTotals();
+  updateProgress();
+
+  document.getElementById('state-loading').classList.add('hidden');
+  document.getElementById('state-main').classList.remove('hidden');
+
+  // Focus automático en input
+  setTimeout(() => document.getElementById('scan-input').focus(), 100);
+
+  // Listener lector (Enter)
+  const input = document.getElementById('scan-input');
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      procesarEscaneo(input.value.trim());
+      input.value = '';
+    }
+  });
+
+  // Re-focus si pierde foco
+  document.addEventListener('click', () => {
+    setTimeout(() => input.focus(), 50);
+  });
+}
+
+// ============================================================
+// RENDER PRODUCTOS
+// ============================================================
+function renderProductos() {
+  const list = document.getElementById('product-list');
+  list.innerHTML = '';
+
+  productos.forEach(p => {
+    const cantEsc  = escaneos[p.ID_Producto];
+    const escaneado = cantEsc !== null;
+    const diff      = escaneado && cantEsc !== p.Cantidad_Pedida;
+    const rowClass  = !escaneado ? 'status-pending' : diff ? 'status-warn' : 'status-ok';
+    const badge     = !escaneado
+      ? '<span class="status-badge badge-pending">Pendiente</span>'
+      : diff
+        ? '<span class="status-badge badge-warn">Diferencia</span>'
+        : '<span class="status-badge badge-ok">OK</span>';
+
+    const scannedClass = !escaneado ? 'pending' : diff ? 'scanned diff' : 'scanned';
+    const scannedVal   = !escaneado ? '—' : cantEsc;
+
+    list.innerHTML += `
+      <div class="product-row ${rowClass}" id="row-${p.ID_Producto}">
+        <div>
+          <div class="prod-name">${p.Nombre}</div>
+          <div class="prod-id">${p.ID_Producto}</div>
+          <div class="prod-ubicacion">📦 ${p.Ubicacion_Bodega || 'Sin asignar'}</div>
+        </div>
+        <div class="qty-block">
+          <div class="qty-label">Pedido</div>
+          <div class="qty-val original">${p.Cantidad_Pedida}</div>
+        </div>
+        <div class="qty-block">
+          <div class="qty-label">Escaneado</div>
+          <div class="qty-val ${scannedClass}">${scannedVal}</div>
+        </div>
+        ${badge}
+      </div>`;
+  });
+}
+
+// ============================================================
+// PROCESAR ESCANEO
+// ============================================================
+function procesarEscaneo(codigo) {
+  if (!codigo) return;
+
+  const prod = productos.find(p =>
+    p.Codigo_Barras && p.Codigo_Barras.toString().trim() === codigo
+  );
+
+  if (!prod) {
+    setScanStatus(`⚠ Código no encontrado: ${codigo}`, 'warn');
+    return;
+  }
+
+  // Si ya fue escaneado, sumar 1 unidad
+  if (escaneos[prod.ID_Producto] === null) {
+    escaneos[prod.ID_Producto] = 1;
+  } else {
+    escaneos[prod.ID_Producto]++;
+  }
+
+  const cant = escaneos[prod.ID_Producto];
+  const diff = cant !== prod.Cantidad_Pedida;
+  const msg  = diff
+    ? `⚠ ${prod.Nombre} — ${cant} unid. (pedido: ${prod.Cantidad_Pedida})`
+    : `✓ ${prod.Nombre} — ${cant} unid.`;
+
+  setScanStatus(msg, diff ? 'warn' : 'ok');
+  renderProductos();
+  updateTotals();
+  updateProgress();
+
+  // Scroll al producto
+  const row = document.getElementById(`row-${prod.ID_Producto}`);
+  if (row) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function setScanStatus(msg, type) {
+  const el = document.getElementById('scan-status');
+  el.textContent = msg;
+  el.className = type || '';
+}
+
+// ============================================================
+// PROGRESS / TOTALES
+// ============================================================
+function updateProgress() {
+  const total    = productos.length;
+  const done     = Object.values(escaneos).filter(v => v !== null).length;
+  const pct      = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  document.getElementById('progress-text').textContent =
+    `${done} de ${total} productos escaneados`;
+  document.getElementById('progress-bar').style.width = pct + '%';
+
+  const allDone = done === total;
+  document.getElementById('btn-confirm').disabled = !allDone;
+}
+
+function updateTotals() {
+  let totalEsc = 0;
+  let hasDiff  = false;
+
+  productos.forEach(p => {
+    const cant = escaneos[p.ID_Producto];
+    if (cant !== null) {
+      totalEsc += cant * p.Precio;
+      if (cant !== p.Cantidad_Pedida) hasDiff = true;
+    } else {
+      totalEsc += p.Cantidad_Pedida * p.Precio;
+    }
+  });
+
+  document.getElementById('total-original').textContent = '$' + fmt(totalOriginal);
+  document.getElementById('total-scanned').textContent  = '$' + fmt(totalEsc);
+  document.getElementById('total-final').textContent    = '$' + fmt(totalEsc);
+
+  const diffAlert = document.getElementById('diff-alert');
+  diffAlert.classList.toggle('visible', hasDiff);
+}
+
+function fmt(n) {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+// ============================================================
+// MODAL CONFIRMACIÓN
+// ============================================================
+function showConfirm() {
+  const changes = document.getElementById('modal-changes');
+  let html = '';
+  let hasDiff = false;
+
+  productos.forEach(p => {
+    const cant = escaneos[p.ID_Producto] ?? p.Cantidad_Pedida;
+    const diff = cant !== p.Cantidad_Pedida;
+    if (diff) hasDiff = true;
+    const cls  = diff ? 'reduced' : 'ok';
+    const icon = diff ? '▶' : '✓';
+    html += `<div class="change-item ${cls}">
+      ${icon} ${p.Nombre}: ${p.Cantidad_Pedida} → <strong>${cant}</strong>
+    </div>`;
+  });
+
+  if (!hasDiff) {
+    html = '<div style="color:var(--ok)">✓ Sin diferencias. Las cantidades coinciden exactamente.</div>';
+  }
+
+  changes.innerHTML = html;
+  document.getElementById('confirm-overlay').classList.add('visible');
+}
+
+function hideConfirm() {
+  document.getElementById('confirm-overlay').classList.remove('visible');
+}
+
+// ============================================================
+// CONFIRMAR REVISIÓN → doPost
+// ============================================================
+async function confirmarRevision() {
+  const btn = document.getElementById('btn-modal-confirm');
+  btn.disabled = true;
+  btn.textContent = 'Procesando...';
+
+  const itemsEscaneados = productos.map(p => ({
+    ID_Producto:      p.ID_Producto,
+    Nombre:           p.Nombre,
+    Cantidad_Pedida:  p.Cantidad_Pedida,
+    Cantidad_Escaneada: escaneos[p.ID_Producto] ?? p.Cantidad_Pedida,
+    Precio:           p.Precio
+  }));
+
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accion:  'revisado',
+        folio:   folio,
+        escaneos: itemsEscaneados
+      })
+    });
+    const data = await res.json();
+
+    hideConfirm();
+
+    if (data.success) {
+      showDone(data);
+    } else {
+      alert('Error: ' + (data.error || 'Error desconocido'));
+      btn.disabled = false;
+      btn.textContent = 'Confirmar';
+    }
+  } catch(e) {
+    alert('Error de conexión: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Confirmar';
+  }
+}
+
+// ============================================================
+// DONE
+// ============================================================
+function showDone(data) {
+  document.getElementById('state-main').classList.add('hidden');
+  const done = document.getElementById('state-done');
+  done.style.display = 'flex';
+
+  const totalFinal = productos.reduce((s, p) => {
+    const cant = escaneos[p.ID_Producto] ?? p.Cantidad_Pedida;
+    return s + (cant * p.Precio);
+  }, 0);
+
+  document.getElementById('done-folio').textContent = folio;
+  document.getElementById('done-msg').textContent =
+    `Revisión completada. Total definitivo: $${fmt(totalFinal)}`;
+}
+
+// ============================================================
+// RESET
+// ============================================================
+function resetScans() {
+  productos.forEach(p => { escaneos[p.ID_Producto] = null; });
+  renderProductos();
+  updateTotals();
+  updateProgress();
+  setScanStatus('Listo para escanear', '');
+  document.getElementById('diff-alert').classList.remove('visible');
+  document.getElementById('scan-input').focus();
+}
+
+function showError(msg) {
+  document.getElementById('state-loading').classList.add('hidden');
+  document.getElementById('state-error').classList.remove('hidden');
+  document.getElementById('error-msg').textContent = msg;
+}
+</script>
+</body>
+</html>
