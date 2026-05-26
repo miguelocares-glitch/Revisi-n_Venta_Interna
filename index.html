@@ -682,15 +682,16 @@ async function confirmarRevision() {
   }));
 
   try {
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        accion:  'revisado',
-        folio:   folio,
-        escaneos: itemsEscaneados
-      })
-    });
+    const url = APPS_SCRIPT_URL
+  + '?accion=revisado&folio='
+  + encodeURIComponent(folio)
+  + '&escaneos='
+  + encodeURIComponent(JSON.stringify(itemsEscaneados));
+
+const res = await fetch(url, {
+  method: 'GET',
+  redirect: 'follow'
+});
     const data = await res.json();
 
     hideConfirm();
