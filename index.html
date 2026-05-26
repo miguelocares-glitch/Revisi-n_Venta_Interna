@@ -465,10 +465,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function fetchPedido(folio) {
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accion: 'getPedido', folio })
+  const url = APPS_SCRIPT_URL
+    + '?accion=getPedido&folio='
+    + encodeURIComponent(folio);
+  const res = await fetch(url, {
+    method: 'GET',
+    redirect: 'follow'
   });
   return await res.json();
 }
